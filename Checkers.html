@@ -1,0 +1,641 @@
+<html>
+<head>
+    <title>Checkers</title>
+<script>
+ var black_checkers = new Array(12);
+ var white_checkers = new Array(12);
+ var is_king1 = false; // проверка, является ли текущая шашка дамкой
+ var active_player = "white"; // цвет текущего игрока
+
+    function draw_king(anim_con, coord_x, coord_y, color_player = active_player) { // рисует корону на шашке
+        anim_con.beginPath();
+            anim_con.fillStyle = (color_player == "black") ? "yellow" :  "red";
+            anim_con.moveTo(coord_x - 25, coord_y + 25);
+            anim_con.lineTo(coord_x + 25, coord_y + 25);
+            anim_con.lineTo(coord_x + 25, coord_y - 25);
+            anim_con.lineTo(coord_x + 12.5, coord_y);
+            anim_con.lineTo(coord_x, coord_y - 25);
+            anim_con.lineTo(coord_x - 12.5, coord_y);
+            anim_con.lineTo(coord_x - 25, coord_y - 25);
+            anim_con.lineTo(coord_x - 25, coord_y + 25);
+            anim_con.closePath();
+            anim_con.fill();
+    }
+
+    function draw_checker(anim_con, coord_x, coord_y, color = active_player) { // рисует шашку
+        anim_con.fillStyle = color;
+        anim_con.beginPath();
+        anim_con.arc(coord_x, coord_y, 50, 0, Math.PI * 2, false);
+        anim_con.fill();
+        anim_con.closePath();
+    }
+
+
+ function update_replace() {  // рисует шашку в том месте, где находится мышь
+        var anim_con = document.getElementById('for_mouse').getContext('2d');
+        anim_con.clearRect(0,0,1500,900);
+        
+        var coord_x = event.clientX;
+        var coord_y = event.clientY;
+        // проверка, не вышла ли шашка за границы
+        if (coord_x > 850) coord_x = 850;
+        if (coord_x < 50) coord_x = 50;
+        if (coord_y > 850) coord_y = 850;
+        if (coord_y < 50) coord_y = 50; 
+
+        draw_checker(anim_con, coord_x, coord_y);
+        if (is_king1) draw_king(anim_con, coord_x, coord_y);
+    }
+
+    function if_was(places, x, y) { // проверка, было ли добавлено это место(необходимо для алгоритма поиска путей шашки)
+        for (var i = 0; i < places.length; ++i) 
+            if (places[i][0] == x && places[i][1] == y) return true;
+        return false;
+    }
+
+class Checker { // класс шашки
+
+    constructor(color, x, y, ctx) {
+        draw_checker(ctx,x,y,color);
+        this.color = color;
+        this.x = x;
+        this.y = y;
+        this.is_king = false;
+    }
+
+    del(ctx) { // стирает шашку с ее текущего местоположения
+        var x_coord = this.x - 50;
+        var y_coord = this.y - 50;
+
+        ctx.fillStyle = "#f0dab5"
+
+        ctx.fillRect(x_coord,y_coord,100,100);
+    }
+
+    paint(ctx) { // рисует шашку по ее координатам
+        draw_checker(ctx, this.x, this.y, this.color);
+        if (this.is_king) draw_king(ctx, this.x, this.y, this.color);
+    }
+
+    
+
+    replace_start(ctx) { // "прикрепляет" шашку к курсору мыши, пока правая кнопка зажата
+        is_king1 = this.is_king;
+       this.del(ctx);
+        var anim_con = document.getElementById('for_mouse').getContext('2d');
+        draw_checker(anim_con, event.clientX, event.clientY, this.color);
+        if (this.is_king) draw_king(anim_con, event.clientX, event.clientY, this.color);
+
+        window.addEventListener("mousemove", update_replace);
+    }
+
+    if_this(x,y) { // проверка, находится ли эта шашка по этим координатам
+        return (x >= this.x - 50 && x <= this.x + 50 && y >= this.y - 50 && y <= this.y + 50);
+    }
+
+    find(x, y, last_x, last_y, places, last_opp, last_place) { // функция поиска путей для поднятой шашки, возвращает массив координат мест, куда может ступить шашка
+        var check_area = 0;
+        var opp_color = (this.color == "black") ? "white" : "black";
+
+        while (check_area != -2 && check_area != -3) {
+            if (if_was(places, x, y)) return;
+            var true_dir = true;
+            if (this.color == "black" && last_y > y) true_dir = false;
+            else if (this.color == "white" && last_y < y) true_dir = false; 
+            if ((check_area = find_checker(x, y, opp_color)) == - 1) {
+                if ((!last_opp && last_place.length == 0 && true_dir) || last_opp)  {
+                    places.push([x, y, last_place]); // last_place необходим для восстановления ответа(у каждого места есть информация о том, откуда в него попадает шашка)
+                    last_place = places[places.length - 1];
+                    if (last_opp) {
+                        if (x - 100 != last_x || y + 100 != last_y)    this.find(x - 100, y + 100, x, y, places, false, last_place);
+                        if (x + 100 != last_x || y + 100 != last_y)    this.find(x + 100, y + 100, x, y, places, false, last_place);
+                        if (x + 100 != last_x || y - 100 != last_y)    this.find(x + 100, y - 100, x, y, places, false, last_place);
+                        if (x - 100 != last_x || y - 100 != last_y)   {
+                            last_x = x;
+                            last_y = y;
+                            x = x - 100;
+                            y = y - 100;
+                            last_opp = false;
+                            continue;
+                        } 
+                    }
+                    return;
+                }
+                else return;
+            }
+            else if (check_area >= 0 && !last_opp) {
+                    var new_x = (last_x > x) ? x - 100 : x + 100;
+                    var new_y = (last_y > y) ? y - 100 : y + 100;
+                    last_x = x;
+                    last_y = y; 
+                    x = new_x;
+                    y = new_y;
+                    last_opp = true;
+            }
+            else return;
+        }
+    }
+
+    king_find(x, y, last_x, last_y, places, last_opp, last_place) { // аналогичный алгоритм для дамки
+        var check_area = 0;
+        var opp_color = (this.color == "black") ? "white" : "black";
+        while (true) {
+            if (if_was(places, x, y)) return;
+            var new_x = (last_x > x) ? x - 100 : x + 100;
+            var new_y = (last_y > y) ? y - 100 : y + 100;
+            
+            if ((check_area = find_checker(x, y, opp_color)) == - 1) {
+                    places.push([x, y, last_place]);
+                    last_place =  places[places.length - 1];                        
+                    if (last_opp) {
+                        if ((x - 100 != last_x || y - 100 != last_y) && (x - 100 != new_x || y - 100 != new_y))    this.find(x - 100, y - 100, x, y, places, false, last_place);
+                        if ((x - 100 != last_x || y + 100 != last_y) && (x - 100 != new_x || y + 100 != new_y))    this.find(x - 100, y + 100, x, y, places, false, last_place);
+                        if ((x + 100 != last_x || y + 100 != last_y) && (x + 100 != new_x || y + 100 != new_y))    this.find(x + 100, y + 100, x, y, places, false, last_place);
+                        if ((x + 100 != last_x || y - 100 != last_y) && (x + 100 != new_x || y - 100 != new_y))    this.find(x + 100, y - 100, x, y, places, false, last_place);
+                    }
+                    last_x = x;
+                    last_y = y;
+                    x = new_x;
+                    y = new_y;
+                    last_opp = false;
+            }
+            else if (check_area >= 0 && !last_opp) {
+                last_x = x;
+                last_y = y;
+                x = new_x;
+                y = new_y;
+                last_opp = true;
+                }
+            else return;
+        }
+    }
+
+    find_places() { // старт поиска путей
+        var places = new Array();
+
+        if (!this.is_king) {
+                this.find(this.x + 100, this.y + 100, this.x, this.y, places, false, new Array());
+            if (!if_was(places, this.x - 100, this.y + 100))
+                this.find(this.x - 100, this.y + 100, this.x, this.y, places, false, new Array());
+            if (!if_was(places, this.x + 100, this.y - 100))
+                this.find(this.x + 100, this.y - 100, this.x, this.y, places, false, new Array());
+            if (!if_was(places, this.x - 100, this.y - 100))
+                this.find(this.x - 100, this.y - 100, this.x, this.y, places, false, new Array());
+        }
+        else {
+                this.king_find(this.x + 100, this.y + 100, this.x, this.y, places, false, new Array());
+            if (!if_was(places, this.x - 100, this.y + 100))    
+                this.king_find(this.x - 100, this.y + 100, this.x, this.y, places, false, new Array());
+            if (!if_was(places, this.x + 100, this.y - 100))
+                this.king_find(this.x + 100, this.y - 100, this.x, this.y, places, false, new Array());
+            if (!if_was(places, this.x - 100, this.y - 100))
+                this.king_find(this.x - 100, this.y - 100, this.x, this.y, places, false, new Array());
+        }
+
+        return places;
+    }
+}
+
+
+
+
+function find_checker(x, y, inst_color) { //  ищет шашку по этим координатам среди всех шашек
+    if (x < 50 || y < 50 || x > 850 || y > 850) return -2; // если координаты вышли за границы поля, вернуть -2
+    var num = -1;
+   var color = "undefined";
+    for (var i = 0; i < black_checkers.length || i < white_checkers.length; ++i) {
+        if (i < black_checkers.length && black_checkers[i].if_this(x, y)) {
+            num = i;
+            color = "black";
+            break;
+        }
+        if (i < white_checkers.length && white_checkers[i].if_this(x, y)) {
+            num = i;
+            color = "white";
+            break;
+        }
+    }
+    if (num == -1) return -1; // если не нашлось, вернуть -1
+    if (color != inst_color) return -3; // если нашел шашку своего же цвета, вернуть -3
+    return num;
+}
+
+    function letter(i) { // возвращает нужную букву в зависимости от клетки(необходимо для изначальной отрисовки поля)
+        switch (i) {
+            case 0: return "a";
+            case 1: return "b";
+            case 2: return "c";
+            case 3: return "d";
+            case 4: return "e";
+            case 5: return "f";
+            case 6: return "g";
+            case 7: return "h";
+        }
+    }
+   
+   function pick_cells(places, ctx) { // подсвечивает клетки, на которые может наступить шашка
+    ctx.strokeStyle = "red";
+   ctx.lineWidth = 2;
+   for (var i = 0; i < places.length; ++i) 
+         ctx.strokeRect(places[i][0] - 49, places[i][1] - 49, 97, 97);
+   }
+
+   function unpick_cells(places, ctx) { // убирает подсвечивание
+    ctx.strokeStyle = "#f0dab5";
+    ctx.lineWidth = 2;
+   for (var i = 0; i < places.length; ++i) 
+        ctx.strokeRect(places[i][0] - 49, places[i][1] - 49, 97, 97);
+   
+   
+   }
+
+// дамми-функция, необходимая для того, чтобы передать функцию с параметрами в EventListener и затем после того, как он отработает, отключить его
+   var pl = 0;
+   var ch = 0;
+   var returning = 0;
+   function dummy_for_add(call, place, chacker) {
+       if (call == 0){
+       pl = place;
+       ch = chacker;
+       returning = function() {
+            stop_moving(chacker, place);
+        }
+       }
+        return returning;
+   }
+
+
+   function move() { // находит и двигает ту шашку, на которую нажал игрок
+        var ctx = document.getElementById('field').getContext('2d');
+        var num = find_checker(event.clientX, event.clientY, active_player);
+        var places;
+        if (num < 0) return;
+        if (active_player == "black") {
+            places =  black_checkers[num].find_places();
+            if (places.length == 0) return;
+            black_checkers[num].replace_start(ctx);
+            var stop_move = dummy_for_add(0, places, black_checkers[num]);
+        }
+        else {
+            places =  white_checkers[num].find_places(); 
+            if (places.length == 0) return;
+            white_checkers[num].replace_start(ctx);
+            var stop_move = dummy_for_add(0, places, white_checkers[num]);
+        }
+        window.addEventListener("mouseup", stop_move);
+        pick_cells(places, ctx);
+    }
+
+    function find_area(places, x, y) { // поиск нужного места по координатам
+    for (var i = 0; i < places.length; ++i) {
+        if ( (x >= places[i][0] - 50 && x <= places[i][0] + 50 && y >= places[i][1] - 50 && y <= places[i][1] + 50))
+            return i;
+    }
+    return -1;
+    }
+
+    function fly(start_x, start_y, end_x, end_y, color = active_player, step = 10, anim_con = document.getElementById('animation').getContext('2d'), borders = [850, 50, 850, 50], is_king = false, funct = function () {}) { //функция, осуществляющая перелет шашек
+        if (start_x > borders[0]) start_x = borders[0];
+        if (start_x < borders[1]) start_x = borders[1];
+        if (start_y > borders[2]) start_y = borders[2];
+        if (start_y < borders[3]) start_y = borders[3]; 
+        
+        anim_con.clearRect(0,0,1500,900);
+
+        var x_dif = Math.abs(start_x - end_x);
+        var y_dif = Math.abs(start_y - end_y);
+        var len = Math.sqrt(x_dif*x_dif + y_dif*y_dif);
+        var new_len = len - step;
+        if (Math.abs(new_len) < step) new_len = 0;
+        var k = new_len / len;
+        var x_dif_new = x_dif * k;
+        var y_dif_new = y_dif * k;
+        start_x = (start_x > end_x) ? end_x+x_dif_new : end_x - x_dif_new;
+        start_y = (start_y > end_y) ? end_y+y_dif_new : end_y - y_dif_new;
+
+        draw_checker(anim_con,start_x, start_y, color);
+        if (is_king) draw_king(anim_con,start_x, start_y, color);
+
+        if (len >= step) setTimeout(function() {
+           fly(start_x, start_y, end_x, end_y, color, step, anim_con, borders, is_king, funct);
+            }, 5);
+        else {
+            funct();
+        }
+    }
+
+    var dead_white_count = 0;
+    var dead_black_count = 0;
+
+    function to_heavens(checker) { // все шашки после смерти попадают на небеса
+        var stx = document.getElementById('Haron').getContext('2d');
+        var coord_x, coord_y;
+        if (checker.color == "white") {
+        coord_x = 1025 + (dead_white_count%4)*125;
+        coord_y = 550;
+        for (var i = 4; i <= dead_white_count; i+=4) 
+            coord_y += 125;
+        dead_white_count++;
+        }
+        else {
+        coord_x = 1025 + (dead_black_count%4)*125;
+        coord_y = 100;
+        for (var i = 4; i <= dead_black_count; i+=4) 
+            coord_y += 125;
+        dead_black_count++;
+        }
+        fly(checker.x,checker.y,coord_x, coord_y, checker.color, 10,  stx, new Array(1500, 0, 900, 0), checker.is_king, function() {
+            var heavens = document.getElementById('dead_checkers').getContext('2d');
+            draw_checker(heavens, coord_x, coord_y, checker.color);
+            if (checker.is_king)  draw_king(heavens, coord_x, coord_y, checker.color);
+            stx.clearRect(0, 0, 1250, 900);
+        });
+    }
+
+    var is_ready = true; // проверка, закончилась ли прошлая jump
+
+    function jump(place, checker, if_first) { // переставляет шашку
+        var anim_con = document.getElementById('animation').getContext('2d');
+        if (!is_ready && if_first == 0) { // ожидание, пока последний прыжок не закончится
+            setTimeout(function() {
+                jump(place,checker,0);
+            }, 100)
+            return;
+        }
+        var stx = document.getElementById('field').getContext('2d');
+        if (if_first == 0) { // шашка возвращается
+            is_ready = false;
+            anim_con.clearRect(0,0,900,900);
+            checker.paint(stx);
+            setTimeout(function() {
+                jump(place,checker,2);
+            }, 250)
+            return;
+        }
+        if (if_first == 2) { //  полет к следующей позиции
+            checker.del(stx);
+            fly(checker.x, checker.y, place[0], place[1], checker.color, 7, anim_con, [850, 50, 850, 50], checker.is_king, function() {
+                jump(place,checker,1);
+                is_ready = true;
+            });
+            return;
+        }
+     
+        var opp_color = (checker.color == "black") ? "white" : "black";
+        var dif_x = Math.abs(checker.x - place[0]);
+        var dif_y = Math.abs(checker.y - place[1]);
+        if (dif_x > 100 || dif_y > 100) {
+            coord_x = (checker.x < place[0]) ? checker.x + 100 : checker.x - 100;
+            coord_y = (checker.y < place[1]) ? checker.y + 100 : checker.y - 100;
+            var it = find_checker(coord_x, coord_y, opp_color);
+
+            if (opp_color == "black") { 
+                black_checkers[it].del(stx);
+                to_heavens(black_checkers[it]);
+                black_checkers.splice(it,1); 
+            }
+            else {
+                white_checkers[it].del(stx);
+                to_heavens(white_checkers[it]);
+                white_checkers.splice(it,1);
+            }
+        }
+
+        var anim_con = document.getElementById('animation').getContext('2d');
+        anim_con.clearRect(0,0,900,900);
+        checker.del(stx);
+        checker.x = place[0];
+        checker.y = place[1];
+        if (checker.color == "black" && checker.y >= 750) checker.is_king = true;
+        else if (checker.color == "white" && checker.y <= 150) checker.is_king = true;
+        checker.paint(stx);
+    }
+
+    function move_checker(place, checker, if_first) { // переставляет шашку(ну это как бы главная функция, а та не очень)
+        if (place[2].length != 0) {// переход к самой первой клетке на пути до той, которую выбрал пользователь
+            if_first = 0;
+            move_checker(place[2], checker, 0);
+        }
+        jump(place,checker, if_first);
+    }
+
+    var if_lighter = false; // проверка, подсвечивается это кнопка уже или нет
+    function but_light() { // подсвечивает кнопку при наведении на нее мышью
+        var stx = document.getElementById('animation').getContext('2d');
+        var x = event.clientX;
+        var y = event.clientY;
+        if (!(y >= 500 && y <= 575)) {
+            stx.clearRect(0,0,1500,900);
+            if_lighter = false;
+            return;
+        }
+        if (!(x >= 450 && x <= 615))  {
+            stx.lineWidth = 3;
+            stx.clearRect(400,450,255,155);
+            if_lighter = false;
+
+        }
+
+        if (!(x >= 810 && x <= 975)) {
+            stx.lineWidth = 3;
+            stx.clearRect(800,450,255,155);
+            if_lighter = false;
+        }
+
+         if ((x >= 450 && x <= 615) && !if_lighter) {
+            if_lighter = true;
+            stx.strokeStyle = "blue";
+            stx.lineWidth = 3;
+            stx.strokeRect(450,500,165,75);
+        }
+    
+         if ((x >= 810 && x <= 975) && !if_lighter) {
+            if_lighter = true;
+            stx.strokeStyle = "blue";
+            stx.lineWidth = 3;
+            stx.strokeRect(810,500,165,75);
+        }
+      
+    }
+
+    function but_click() { // действие по клику мышью
+        var x = event.clientX;
+        var y = event.clientY;
+        if (!(y >= 500 && y <= 575)) {
+            return;
+        }
+        if (!(x >= 450 && x <= 615) && !(x >= 810 && x <= 975))  {
+            return;
+        }
+        if ((x >= 450 && x <= 615)) {
+            var stx = document.getElementById('end_game').getContext('2d');
+            stx.clearRect(0,0,1500,900);
+        }
+        if (x >= 810 && x <= 975) document.location.reload();
+
+        var del = document.getElementById('animation').getContext('2d'); 
+        del.clearRect(0,0,1500,900);
+        window.removeEventListener("mousemove", but_light);
+        window.removeEventListener("click", but_click);
+
+    }
+
+
+    function end_game() { // окно с результатами
+        var stx = document.getElementById('end_game').getContext('2d');
+        stx.fillStyle = "#B94646"
+        stx.fillRect(375,275,675,350);
+        stx.fillStyle = "#F5E989"
+        stx.fillRect(400,300,625,300);
+        stx.fillStyle = "black";
+        stx.font = "50pt Arial";
+        stx.fillText("Congratulations!",  465, 375);
+        stx.fillText(active_player+" won!", 550, 450);
+        window.removeEventListener("mousedown", move, false);
+
+        stx.fillStyle = "#B71015"
+        stx.fillRect(450,500,165,75);
+        stx.fillRect(810,500,165,75);
+        stx.fillStyle = "white"
+        stx.font = "20pt Arial";
+        stx.fillText("Назад к игре",   455, 545);
+        stx.fillText("Новая игра",   820, 545);
+
+        window.addEventListener("mousemove", but_light);
+        window.addEventListener("click", but_click);
+
+    }
+
+
+function stop_moving(checker, places) { // ставит шашку на место
+    var stx = document.getElementById('field').getContext('2d');
+    var forMouse = document.getElementById('for_mouse').getContext('2d');
+    forMouse.clearRect(0,0,1500,900);
+    var stop_move = dummy_for_add(1);
+    
+    var coord_x = event.clientX;
+    var coord_y = event.clientY;
+
+    window.removeEventListener("mousemove", update_replace);
+    window.removeEventListener("mouseup", stop_move);
+
+    var space = find_area(places, coord_x, coord_y);
+    unpick_cells(places,stx);
+
+    if (space == -1) {
+        var anim_con = document.getElementById('animation').getContext('2d');
+        fly(coord_x, coord_y, checker.x, checker.y, checker.color, 10, anim_con, [850, 50, 850, 50], checker.is_king, function() {
+            checker.paint(stx);
+            anim_con.clearRect(0,0,1500,900);
+        });
+        return;
+    }
+    else {
+        move_checker(places[space], checker, 1);
+        stx.fillStyle = "#732221"
+        stx.fillRect(0,0,900,50);
+        
+        active_player = (active_player == "white") ? "black" : "white";  
+        stx.fillStyle = active_player;
+        stx.fillText(active_player+" is moving...", 275, 40);
+    }
+    
+
+}
+
+function check_win() {
+    
+    if (black_checkers.length == 0 || white_checkers.length == 0) {
+        var stx = document.getElementById('field').getContext('2d');
+        stx.fillStyle = "#732221"
+        stx.fillRect(0,0,900,50);
+        end_game();
+    }
+    else setTimeout(check_win,1000);
+}
+
+
+function start() { // рисует поле и шашки, запускает игру;
+    var num_black = 0;
+    var num_white = 0;
+
+  var ctx = document.getElementById('field').getContext('2d');
+  ctx.fillStyle = "#732221"
+  ctx.fillRect(0,0,900,900);
+  var x = 0;
+  var y = 50;
+  var step = 100;
+  ctx.font="45px Arial";
+  ctx.fillText("8", x, y);
+  for (var i = 0; i < 8; ++i) {
+      ctx.fillStyle = "black";
+      ctx.fillText(8 - i, x + 10     , y + 75);
+      x += step/2;
+      for (var j = 0; j < 8; ++j) {
+        if ((j%2 && i%2) || (!(j%2) && !(i%2)))  
+            ctx.fillStyle = "#f0dab5";
+
+        else 
+            ctx.fillStyle = "#b58763";
+        ctx.fillRect(x,y,step,step);
+        if (((j%2 && i%2) || (!(j%2) && !(i%2))) && y < 350) 
+                black_checkers[num_black++] = new Checker("black",x + 50,y + 50, ctx);
+            
+            if (((j%2 && i%2) || (!(j%2) && !(i%2))) && y >= 500) 
+                white_checkers[num_white++] = new Checker("white",x + 50,y + 50, ctx);
+            
+        x+=step;
+      }
+      y+=step;
+      x = 0;
+  }
+  ctx.fillStyle = "black";
+  for (var i = 0; i < 8; ++i) {
+      x += step;
+    ctx.fillText(letter(i), x - 10, y + 37);
+  }
+  var dead = document.getElementById('dead_checkers').getContext('2d');
+  dead.fillStyle = "#732221";
+  dead.fillRect(925,0,575,450);
+  dead.fillRect(925,450,575,450);
+  dead.fillStyle = "#b58763";
+  dead.fillRect(950,25,525,400);
+  dead.fillStyle = "#f0dab5";
+  dead.fillRect(950,475,525, 400);
+  dead.fillStyle = "white";
+  dead.font="45px Arial";
+  dead.fillText("Halls of the dead", 1040, 465);
+    ctx.fillStyle = "#732221"
+    ctx.fillRect(0,0,900,50);
+
+    ctx.fillStyle = active_player;
+    ctx.fillText(active_player+" is moving...", 275, 40);
+    window.addEventListener("mousedown", move, false);
+    check_win();
+}
+
+
+</script>
+<style>
+    body {
+        background: gray;
+    }
+  canvas {
+      position: absolute;
+  }
+</style>
+</head>
+<body>
+<canvas width=900px, height=900px, id="field"></canvas>
+<canvas width=1500px, height=900px, id="for_mouse"></canvas>
+<canvas width=1500px, height=900px, id="dead_checkers"></canvas>
+<canvas width=1500px, height=900px, id="Haron"></canvas>
+<canvas width=1500px, height=900px, id="end_game"></canvas>
+<canvas width=1500px, height=900px, id="animation"></canvas>
+<script>
+start();
+</script>
+
+<p id="besit"></p>
+</body>
+</html>
